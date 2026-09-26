@@ -1,0 +1,59 @@
+{
+  "tea-house": {
+    "name": "Tea House",
+    "builtin": true,
+    "desc": "Как сейчас: Gruvbox Material, скругления, размытие",
+    "desc_en": "Your current look: Gruvbox Material, rounded, blurred",
+    "wallpaper": "~/Pictures/wallpapers/meadows-wallpaper-2560x1440-4k-landscape-5333.jpg",
+    "set": {
+      "palette": "gruvbox-material",
+      "accent": "yellow",
+      "font": "Iosevka",
+      "bar_position": "top",
+      "bar_style": "island",
+      "bar_height": 36,
+      "bar_window_title": true,
+      "rounding": 10,
+      "gaps": "normal",
+      "border_size": 2,
+      "border_style": "gradient",
+      "blur": true,
+      "shadow": true,
+      "animations": true,
+      "inactive_opacity": 0.97,
+      "term_opacity": 0.6,
+      "titlebars": false,
+      "ui_style": "modern",
+      "mako_anchor": "top-right"
+    }
+  },
+  "x11-classic": {
+    "name": "X11 Classic",
+    "builtin": true,
+    "desc": "Ретро: серые окна с заголовками и кнопками, фон «weave», никаких скруглений",
+    "desc_en": "Retro: grey title-barred windows, the weave background, square corners",
+    "wallpaper": "~/Pictures/wallpapers/x11-weave.png",
+    "generate": "x11-weave",
+    "set": {
+      "palette": "x11-classic",
+      "accent": "blue",
+      "font": "Liberation Mono",
+      "bar_position": "top",
+      "bar_style": "strip",
+      "bar_height": 30,
+      "bar_window_title": true,
+      "rounding": 0,
+      "gaps": "compact",
+      "border_size": 3,
+      "border_style": "solid",
+      "blur": false,
+      "shadow": false,
+      "animations": false,
+      "inactive_opacity": 1.0,
+      "term_opacity": 1.0,
+      "titlebars": true,
+      "ui_style": "retro",
+      "mako_anchor": "top-right"
+    }
+  }
+}

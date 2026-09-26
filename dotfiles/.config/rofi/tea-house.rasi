@@ -1,0 +1,51 @@
+/* Tea House · rofi */
+@import "colors.rasi"
+* {
+
+    font: "Iosevka 13";
+    background-color: transparent;
+    text-color: @fg;
+    margin: 0; padding: 0; spacing: 0;
+}
+
+window {
+    width: 560px;
+    location: center;
+    background-color: @bg;
+    border: 1px;
+    border-color: @overlay;
+    border-radius: 14px;
+    padding: 14px;
+}
+
+mainbox { spacing: 12px; children: [inputbar, listview]; }
+
+inputbar {
+    background-color: @surface;
+    border-radius: 10px;
+    padding: 10px 14px;
+    spacing: 10px;
+    children: [prompt, entry];
+}
+prompt { text-color: @tea; }
+entry  { placeholder: "что открыть?"; placeholder-color: @muted; cursor: text; }
+
+listview {
+    lines: 8;
+    columns: 1;
+    fixed-height: false;
+    scrollbar: false;
+    spacing: 4px;
+}
+
+element {
+    padding: 8px 12px;
+    border-radius: 8px;
+    spacing: 12px;
+}
+element normal.normal, element alternate.normal { background-color: transparent; }
+element selected.normal { background-color: @tea; text-color: @ink; }
+element-icon { size: 24px; }
+element-text { vertical-align: 0.5; text-color: inherit; highlight: bold; }
+
+message { background-color: @surface; border-radius: 8px; padding: 8px; }

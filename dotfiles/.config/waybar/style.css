@@ -1,0 +1,81 @@
+/* Tea House · Kanagawa Dragon */
+@import "colors.css";
+
+* {
+  font-family: "Iosevka", "Symbols Nerd Font", "Noto Sans CJK JP", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+}
+
+window#waybar {
+  background: alpha(@bg, 0.92);
+  color: @fg;
+  border: 1px solid alpha(@overlay, 0.9);
+  border-radius: 12px;
+}
+
+tooltip {
+  background: @bg;
+  border: 1px solid @overlay;
+  border-radius: 10px;
+}
+tooltip label { color: @fg; padding: 4px; }
+
+.modules-left, .modules-center, .modules-right { padding: 0 6px; }
+
+#custom-logo {
+  color: @tea;
+  font-size: 17px;
+  padding: 0 10px 0 8px;
+}
+
+#workspaces { margin: 4px 0; }
+#workspaces button {
+  color: @muted;
+  padding: 0 9px;
+  margin: 0 1px;
+  border-radius: 8px;
+  background: transparent;
+  transition: all 150ms ease;
+}
+#workspaces button.empty  { color: alpha(@muted, 0.45); }
+#workspaces button:hover  { background: @surface; color: @fg; box-shadow: none; text-shadow: none; }
+#workspaces button.active { background: @tea; color: @bg; }
+#workspaces button.urgent { background: @clay; color: @bg; }
+
+#window { color: @muted; padding-left: 8px; }
+window#waybar.empty #window { padding: 0; }
+
+#clock {
+  color: @paper;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 0 12px;
+}
+
+#mpris, #pulseaudio, #network, #cpu, #memory, #language,
+#tray, #custom-dnd, #custom-power {
+  padding: 0 10px;
+  margin: 5px 0;
+  border-radius: 8px;
+  color: @fg;
+}
+#mpris, #pulseaudio, #network, #cpu, #memory, #language:hover,
+#custom-dnd:hover, #custom-power:hover {
+  background: alpha(@surface, 0.8);
+}
+
+#mpris            { color: @sage; }
+#mpris.paused     { color: @muted; }
+#pulseaudio.muted { color: @muted; }
+#network.disconnected { color: @clay; }
+#cpu.warning, #memory.warning   { color: @amber; }
+#cpu.critical, #memory.critical { color: @clay; }
+#language   { color: @mist; font-weight: 700; }
+#custom-dnd.dnd { color: @amber; }
+#custom-power   { color: @clay; margin-right: 2px; }
+
+#tray > .needs-attention { background: @clay; border-radius: 6px; }

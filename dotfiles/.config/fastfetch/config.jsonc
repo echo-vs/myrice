@@ -1,0 +1,33 @@
+{
+  "$schema": "https://github.com",
+  "logo": {
+    "type": "kitty-direct",
+    "source": "/home/user/Downloads/gentoo-signet.png",
+    "width": 28,
+    "height": 12,
+    "padding": {
+      "top": 1,
+      "left": 1,
+      "right": 3
+    }
+  },
+  "modules": [
+    "title",
+    "separator",
+    "os",
+    "host",
+    "kernel",
+    "uptime",
+    "packages",
+    "shell",
+    "display",
+    "de",
+    "wm",
+    "terminal",
+    "cpu",
+    "gpu",
+    "memory",
+    "break",
+    "colors"
+  ]
+}

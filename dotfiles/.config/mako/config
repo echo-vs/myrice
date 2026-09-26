@@ -1,0 +1,33 @@
+# Tea House · mako
+font=Iosevka 12
+background-color=#282828f0
+text-color=#d4be98
+border-color=#45403d
+progress-color=over #d8a65755
+border-size=1
+border-radius=12
+padding=14,16
+margin=10,14
+width=360
+height=160
+outer-margin=6
+anchor=top-right
+icons=1
+max-icon-size=48
+icon-path=/usr/share/icons/Papirus-Dark
+default-timeout=6000
+layer=overlay
+format=<b>%s</b>\n%b
+
+[urgency=low]
+text-color=#a99881
+
+[urgency=high]
+border-color=#ea6962
+default-timeout=0
+
+[app-name=Скриншот]
+border-color=#a9b665
+
+[mode=do-not-disturb]
+invisible=1

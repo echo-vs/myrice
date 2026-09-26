@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.save
+*.bak
+*.bak-*
+*.tmp
+backup-*/

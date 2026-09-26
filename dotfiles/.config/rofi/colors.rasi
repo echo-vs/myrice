@@ -1,0 +1,10 @@
+/* Gruvbox Material · сгенерировано rice.py */
+* {
+    bg:       #282828f0;
+    surface:  #32302f;
+    overlay:  #45403d;
+    muted:    #928374;
+    fg:       #d4be98;
+    tea:      #d8a657;
+    ink:      #282828;
+}
