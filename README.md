@@ -1,12 +1,12 @@
-# Tea House · Hyprland rice 茶
+# hyprEcho · Hyprland rice 茶
 
-Hyprland + waybar + rofi + kitty + mako + hyprlock/hypridle, настройщики `rice.py` (меню) и `gui.py` (окно GTK4), две темы: **Tea House** (Gruvbox Material) и **X11 Classic** (заголовки окон через hyprbars).
+Hyprland + waybar + rofi + kitty + mako + hyprlock/hypridle, настройщики `rice.py` (меню) и `gui.py` (окно GTK4), две темы: **hyprEcho** (Gruvbox Material) и **X11 Classic** (заголовки окон через hyprbars).
 
 ## Установка
 
 ```bash
-git clone <этот репозиторий> ~/Projects/tea-house
-cd ~/Projects/tea-house
+git clone <этот репозиторий> ~/Projects/hyprecho
+cd ~/Projects/hyprecho
 ./install.sh
 ```
 
@@ -21,7 +21,7 @@ cd ~/Projects/tea-house
 | `extras`   | «Настройки райса» / «Темы» / «Язык» в лаунчере, команда `rice` |
 | `apply`    | генерирует цвета, бар, rofi, kitty, mako под выбранную тему |
 
-Без вопросов: `./install.sh -y --theme tea-house`. Посмотреть план: `./install.sh --dry-run`.
+Без вопросов: `./install.sh -y --theme hyprecho`. Посмотреть план: `./install.sh --dry-run`.
 
 При установке копиями конфиг сам подгоняется под машину: без NVIDIA комментируются её env-переменные, находится нужный polkit-агент, убирается `gentoo-pipewire-launcher`, если его нет. Строку `monitor = DP-1, 2560x1440@240` поправь под свой монитор.
 
@@ -35,7 +35,7 @@ cd ~/Projects/tea-house
 ./install.sh uninstall    # убрать райс и вернуть бэкап
 ```
 
-Бэкапы и логи лежат в `~/.local/share/tea-house/`.
+Бэкапы и логи лежат в `~/.local/share/hyprecho/`.
 
 ## Главные бинды
 

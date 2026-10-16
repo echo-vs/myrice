@@ -1,6 +1,6 @@
 {
-  "tea-house": {
-    "name": "Tea House",
+  "hyprecho": {
+    "name": "hyprEcho",
     "builtin": true,
     "desc": "Как сейчас: Gruvbox Material, скругления, размытие",
     "desc_en": "Your current look: Gruvbox Material, rounded, blurred",
@@ -53,6 +53,65 @@
       "term_opacity": 1.0,
       "titlebars": true,
       "ui_style": "retro",
+      "mako_anchor": "top-right"
+    }
+  },
+  "sakura": {
+    "name": "Sakura Milk",
+    "builtin": true,
+    "desc": "Миленькая: пастельно-розовая, мягкие углы, сердечки на обоях",
+    "desc_en": "Cute: pastel pink, soft corners, little hearts on the wallpaper",
+    "wallpaper": "~/Pictures/wallpapers/sakura-hearts.png",
+    "generate": "sakura-hearts",
+    "set": {
+      "palette": "sakura-milk",
+      "accent": "magenta",
+      "font": "Iosevka",
+      "bar_position": "top",
+      "bar_style": "island",
+      "bar_height": 36,
+      "bar_window_title": true,
+      "rounding": 16,
+      "gaps": "wide",
+      "border_size": 3,
+      "border_style": "gradient",
+      "blur": true,
+      "shadow": true,
+      "animations": true,
+      "inactive_opacity": 0.9,
+      "term_opacity": 0.75,
+      "titlebars": false,
+      "ui_style": "modern",
+      "mako_anchor": "top-right"
+    }
+  },
+  "aphextheme": {
+    "name": "aphextheme",
+    "desc": "",
+    "wallpaper": "/home/user/Pictures/wallpapers/hyprecho.png",
+    "set": {
+      "palette": "custom-aphextheme",
+      "accent": "yellow",
+      "font": "Iosevka",
+      "bar_position": "top",
+      "bar_style": "island",
+      "bar_height": 36,
+      "bar_window_title": true,
+      "bar_layout": "modules",
+      "bar_opacity": 0.72,
+      "bar_blur": true,
+      "rounding": 10,
+      "gaps": "none",
+      "border_size": 0,
+      "border_style": "solid",
+      "blur": false,
+      "blur_strength": 4,
+      "shadow": false,
+      "animations": true,
+      "inactive_opacity": 0.97,
+      "term_opacity": 1.0,
+      "titlebars": false,
+      "ui_style": "modern",
       "mako_anchor": "top-right"
     }
   }

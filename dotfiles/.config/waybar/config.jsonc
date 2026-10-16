@@ -1,4 +1,4 @@
-// Tea House · Waybar
+// hyprEcho · Waybar
 {
   "layer": "top",
   "position": "top",
@@ -46,9 +46,9 @@
       "weeks-pos": "",
       "on-scroll": 1,
       "format": {
-        "months":   "<span color='#d8a657'><b>{}</b></span>",
-        "weekdays": "<span color='#928374'>{}</span>",
-        "today":    "<span color='#282828' background='#d8a657'><b> {} </b></span>"
+        "months":   "<span color='#f7a8d8'><b>{}</b></span>",
+        "weekdays": "<span color='#a68aa8'>{}</span>",
+        "today":    "<span color='#2b1f2e' background='#f7a8d8'><b> {} </b></span>"
       }
     },
     "actions": { "on-scroll-up": "shift_down", "on-scroll-down": "shift_up" }

@@ -11,4 +11,4 @@ configuration {
     sorting-method: "fzf";
     terminal: "kitty";
 }
-@theme "tea-house"
+@theme "hyprecho"

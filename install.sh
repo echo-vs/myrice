@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
-#  Tea House · установщик райса (Hyprland + waybar + rofi + kitty + mako
+#  hyprEcho · установщик райса (Hyprland + waybar + rofi + kitty + mako
 #  + настройщики rice.py / gui.py)
 #
 #  ./install.sh                 интерактивная установка (меню компонентов)
 #  ./install.sh -y              всё по умолчанию, без вопросов
 #  ./install.sh --link          симлинки на репозиторий вместо копий
-#  ./install.sh --theme ID      какую тему применить (tea-house, x11-classic)
+#  ./install.sh --theme ID      какую тему применить (hyprecho, x11-classic)
 #  ./install.sh --only a,b      только эти компоненты (packages,configs,assets,plugin,extras,apply)
 #  ./install.sh --skip a,b      всё, кроме этих
 #  ./install.sh --dry-run       показать, что будет сделано, ничего не трогая
@@ -20,7 +20,7 @@ set -euo pipefail
 
 REPO=$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)
 DOT=$REPO/dotfiles
-DATA=${XDG_DATA_HOME:-$HOME/.local/share}/tea-house
+DATA=${XDG_DATA_HOME:-$HOME/.local/share}/hyprecho
 BACKUPS=$DATA/backups
 STAMP=$(date +%Y%m%d-%H%M%S)
 LOG=$DATA/install-$STAMP.log
@@ -194,7 +194,7 @@ install_gentoo() {
     run $SUDO emaint sync -r hyproverlay || warn "не удалось синхронизировать hyproverlay"
     run $SUDO emaint sync -r guru || warn "не удалось синхронизировать guru"
 
-    info "package.accept_keywords / package.use → tea-house"
+    info "package.accept_keywords / package.use → hyprecho"
     local kw use
     kw=$(cat <<'KW'
 */*::hyproverlay ~amd64
@@ -210,11 +210,11 @@ dev-python/pygobject cairo
 USE
 )
     if ((DRY)); then
-        printf '  %s$ write /etc/portage/package.{accept_keywords,use}/tea-house%s\n' "$D" "$R"
+        printf '  %s$ write /etc/portage/package.{accept_keywords,use}/hyprecho%s\n' "$D" "$R"
     else
         $SUDO mkdir -p /etc/portage/package.accept_keywords /etc/portage/package.use
-        printf '%s\n' "$kw" | $SUDO tee /etc/portage/package.accept_keywords/tea-house >/dev/null
-        printf '%s\n' "$use" | $SUDO tee /etc/portage/package.use/tea-house >/dev/null
+        printf '%s\n' "$kw" | $SUDO tee /etc/portage/package.accept_keywords/hyprecho >/dev/null
+        printf '%s\n' "$use" | $SUDO tee /etc/portage/package.use/hyprecho >/dev/null
     fi
 
     info "emerge (${#GENTOO_PKGS[@]} пакетов, уже стоящие пропустятся)"
@@ -386,9 +386,9 @@ EOF
 do_extras() {
     step "Ярлыки и команды"
     local rice=$HOME/.config/hypr/rice
-    desktop_entry tea-house-settings.desktop "Настройки райса" "Tea House: цвета, бар, окна, шрифты" "$rice/gui.py" preferences-desktop-theme
-    desktop_entry tea-house-themes.desktop "Темы райса" "Tea House: быстрый выбор темы" "$rice/gui.py themes" preferences-desktop-color
-    desktop_entry tea-house-lang.desktop "Язык и раскладка" "Tea House: язык интерфейса и раскладки" "$rice/gui.py lang" preferences-desktop-locale
+    desktop_entry hyprecho-settings.desktop "Настройки райса" "hyprEcho: цвета, бар, окна, шрифты" "$rice/gui.py" preferences-desktop-theme
+    desktop_entry hyprecho-themes.desktop "Темы райса" "hyprEcho: быстрый выбор темы" "$rice/gui.py themes" preferences-desktop-color
+    desktop_entry hyprecho-lang.desktop "Язык и раскладка" "hyprEcho: язык интерфейса и раскладки" "$rice/gui.py lang" preferences-desktop-locale
     ok "Лаунчер: «Настройки райса», «Темы райса», «Язык и раскладка»"
 
     run mkdir -p "$HOME/.local/bin"
@@ -404,7 +404,7 @@ pick_theme() {
     local -a ids names
     mapfile -t ids < <(python3 -c 'import json,sys; [print(k) for k in json.load(open(sys.argv[1]))]' "$tf" 2>/dev/null)
     mapfile -t names < <(python3 -c 'import json,sys; [print(v["name"]+" — "+v.get("desc","")) for v in json.load(open(sys.argv[1])).values()]' "$tf" 2>/dev/null)
-    THEME=${ids[0]:-tea-house}
+    THEME=${ids[0]:-hyprecho}
     ((YES)) || [[ ! -t 0 ]] || ((${#ids[@]} < 2)) && return
     printf '\n  %sТема:%s\n' "$B" "$R"
     local i
@@ -486,10 +486,10 @@ cmd_restore() {
 
 cmd_uninstall() {
     banner
-    ask "Убрать конфиги Tea House и вернуть последний бэкап?" n || exit 0
+    ask "Убрать конфиги hyprEcho и вернуть последний бэкап?" n || exit 0
     local d
     for d in "${CONFIG_DIRS[@]}"; do run rm -rf "${HOME:?}/.config/$d"; done
-    run rm -f "$HOME"/.local/share/applications/tea-house-*.desktop "$HOME/.local/bin/rice"
+    run rm -f "$HOME"/.local/share/applications/hyprecho-*.desktop "$HOME/.local/bin/rice"
     ok "Конфиги и ярлыки убраны (пакеты, обои и курсоры оставил)"
     if [[ -d $BACKUPS ]] && ls "$BACKUPS" | grep -q .; then cmd_restore; fi
 }

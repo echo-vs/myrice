@@ -190,5 +190,42 @@
       "#008b8b",
       "#ffffff"
     ]
+  },
+  "sakura-milk": {
+    "name": "Sakura Milk",
+    "bg": "#2b1f2e",
+    "bg_dark": "#1f1621",
+    "surface": "#3b2a40",
+    "overlay": "#5a4060",
+    "muted": "#a68aa8",
+    "fg": "#f7e1ec",
+    "bright": "#fff0f7",
+    "yellow": "#ffd8a8",
+    "orange": "#ffb4c8",
+    "green": "#b9e4c9",
+    "red": "#ff8fab",
+    "blue": "#c3b4ff",
+    "magenta": "#f7a8d8",
+    "cyan": "#a9e5e1",
+    "selection": "#5c3b62"
+  },
+  "custom-aphextheme": {
+    "name": "aphextheme",
+    "custom": true,
+    "bg": "#181616",
+    "bg_dark": "#0d0c0c",
+    "surface": "#282727",
+    "overlay": "#393836",
+    "selection": "#f6f5f4",
+    "muted": "#737c73",
+    "fg": "#c5c9c5",
+    "bright": "#ffffff",
+    "yellow": "#c4b28a",
+    "orange": "#b6927b",
+    "red": "#c4746e",
+    "green": "#8a9a7b",
+    "cyan": "#8ea4a2",
+    "blue": "#8ba4b0",
+    "magenta": "#a292a3"
   }
 }

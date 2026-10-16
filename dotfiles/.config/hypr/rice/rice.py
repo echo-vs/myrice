@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Tea House · настройки райса
+# hyprEcho · настройки райса
 #   rice.py menu          — меню (Super + I, или ПКМ по 茶 в waybar)
 #   rice.py apply         — пересобрать все конфиги из state.json
 #   rice.py set KEY VALUE — поменять одну настройку, например: rice.py set palette nord
@@ -10,7 +10,7 @@
 #
 # Палитры лежат в palettes.json: добавь свою по образцу, и она появится в меню.
 # Цвета генерируются в: hypr/colors.conf, waybar/colors.css, rofi/colors.rasi,
-# kitty/tea-house.conf, mako/config. Окна Hyprland: hypr/rice.conf.
+# kitty/hyprecho.conf, mako/config. Окна Hyprland: hypr/rice.conf.
 
 import html, json, os, re, shutil, subprocess, sys, time
 
@@ -22,8 +22,8 @@ PALETTES = json.load(open(os.path.join(HERE, 'palettes.json')))
 P = lambda *a: os.path.join(CFG, *a)
 HYPR, HYPR_COLORS, HYPR_RICE, HYPRLOCK = P('hypr/hyprland.conf'), P('hypr/colors.conf'), P('hypr/rice.conf'), P('hypr/hyprlock.conf')
 WB_CONF, WB_CSS, WB_COLORS = P('waybar/config.jsonc'), P('waybar/style.css'), P('waybar/colors.css')
-ROFI_THEME, ROFI_COLORS = P('rofi/tea-house.rasi'), P('rofi/colors.rasi')
-KITTY_CONF, KITTY_COLORS = P('kitty/kitty.conf'), P('kitty/tea-house.conf')
+ROFI_THEME, ROFI_COLORS = P('rofi/hyprecho.rasi'), P('rofi/colors.rasi')
+KITTY_CONF, KITTY_COLORS = P('kitty/kitty.conf'), P('kitty/hyprecho.conf')
 MAKO = P('mako/config')
 PLASMA_LOCALE = P('plasma-localerc')
 WALLPAPER = P('hypr/scripts/wallpaper.sh')
@@ -55,8 +55,9 @@ DEFAULT = {
     'palette': 'kanagawa-dragon', 'accent': 'yellow', 'font': 'Iosevka',
     'bar_position': 'top', 'bar_style': 'island', 'bar_height': 36, 'bar_window_title': True,
     'bar_modules': {m: True for m, _ in MODULES},
+    'bar_layout': 'solid', 'bar_opacity': 0.92, 'bar_blur': True,
     'rounding': 10, 'gaps': 'normal', 'border_size': 2, 'border_style': 'gradient',
-    'blur': True, 'shadow': True, 'animations': True, 'inactive_opacity': 0.97,
+    'blur': True, 'blur_strength': 4, 'term_blur': True, 'shadow': True, 'animations': True, 'inactive_opacity': 0.97,
     'term_opacity': 0.6, 'titlebars': False, 'ui_style': 'modern',
     'mako_anchor': 'top-right',
     # система
@@ -68,7 +69,8 @@ DEFAULT = {
 }
 # Что входит в тему (остальное — личные настройки системы, темы их не трогают)
 THEME_KEYS = ['palette', 'accent', 'font', 'bar_position', 'bar_style', 'bar_height', 'bar_window_title',
-              'rounding', 'gaps', 'border_size', 'border_style', 'blur', 'shadow', 'animations',
+              'bar_layout', 'bar_opacity', 'bar_blur',
+              'rounding', 'gaps', 'border_size', 'border_style', 'blur', 'blur_strength', 'shadow', 'animations',
               'inactive_opacity', 'term_opacity', 'titlebars', 'ui_style', 'mako_anchor']
 
 
@@ -102,8 +104,8 @@ def blend(a, b, t):
     return '#' + ''.join(f'{round(x + (y - x) * t):02x}' for x, y in zip(rgb(a), rgb(b)))
 
 
-def colors(st):
-    p = PALETTES[st['palette']]
+def colors(st, pal=None):
+    p = pal or PALETTES[st['palette']]
     acc = st['accent'] if st['accent'] in p else 'yellow'
     c = {
         'bg': p['bg'], 'bg_dark': p['bg_dark'], 'surface': p['surface'], 'overlay': p['overlay'],
@@ -222,6 +224,10 @@ tab_bar_background      {c['bg_dark']}
     if write(KITTY_COLORS, kitty):
         changed.add('kitty')
 
+    lock = sub1(r'^(\s*inner_color\s*=\s*)rgba\([0-9a-fA-F]{8}\)', lambda m: f"{m.group(1)}rgba({hx('bg')}e0)", read(HYPRLOCK))
+    lock = sub1(r'(placeholder_text\s*=.*foreground="##)[0-9a-fA-F]{6}', lambda m: m.group(1) + hx('muted'), lock)
+    write(HYPRLOCK, lock)
+
     wb = read(WB_CONF)
     wb = sub1(r'("months":\s*"<span color=\')#[0-9a-fA-F]{6}', r'\g<1>' + c['tea'], wb)
     wb = sub1(r'("weekdays":\s*"<span color=\')#[0-9a-fA-F]{6}', r'\g<1>' + c['muted'], wb)
@@ -250,7 +256,30 @@ def gen_waybar(st):
     css = read(WB_CSS)
     css = sub1(r'(window#waybar\s*\{[^}]*?border-radius:\s*)\d+px', rf'\g<1>{12 if island else 0}px', css, flags=re.S)
     css = sub1(r'(window#waybar\s*\{[^}]*?border:\s*)[^;]+', r'\g<1>' + ('1px solid alpha(@overlay, 0.9)' if island else '0'), css, flags=re.S)
+    css = put_block(css, bar_css(st), BAR_BEGIN, BAR_END)
     return changed | write(WB_CSS, css)
+
+
+BAR_BEGIN, BAR_END = '/* rice:bar — генерирует rice.py, не править */', '/* rice:bar end */'
+
+
+def bar_css(st):
+    """Фон панели: одна сплошная плашка или отдельные плашки слева, по центру и справа."""
+    op = f"{min(1.0, max(0.0, float(st['bar_opacity']))):.2f}"
+    if st['bar_layout'] != 'modules':
+        return f'window#waybar {{ background: alpha(@bg, {op}); }}'
+    island = st['bar_style'] == 'island'
+    return f"""
+window#waybar {{ background: transparent; border: none; }}
+.modules-left, .modules-center, .modules-right {{
+  background: alpha(@bg, {op});
+  border: 1px solid alpha(@overlay, 0.9);
+  border-radius: 12px;
+  padding: 0 6px;
+}}
+.modules-left {{ margin-left: {0 if island else 6}px; }}
+.modules-right {{ margin-right: {0 if island else 6}px; }}
+""" + ('' if island else '.modules-left, .modules-center, .modules-right { margin-top: 3px; margin-bottom: 3px; }\n')
 
 
 def gen_hypr(st):
@@ -273,6 +302,8 @@ decoration {{
 
     blur {{
         enabled = {onoff(st['blur'])}
+        size = {blur_size(st)}
+        passes = {blur_passes(st)}
     }}
 
     shadow {{
@@ -316,7 +347,7 @@ windowrule {
     float = on
     center = on
 }
-""" + bars_block(st)
+""" + term_rule(st) + bar_rule(st) + bars_block(st)
     return write(HYPR_RICE, text)
 
 
@@ -324,12 +355,55 @@ def onoff(b):
     return str(bool(b)).lower()
 
 
+def blur_level(st):
+    return min(10, max(1, int(st['blur_strength'])))
+
+
+def blur_size(st):
+    return blur_level(st) + 2  # 3…12
+
+
+def blur_passes(st):
+    lv = blur_level(st)
+    return 1 + (lv > 3) + (lv > 7)  # 1…3
+
+
+def term_rule(st):
+    """Без размытия под терминалом: сквозь него видно окна и обои как есть."""
+    if st['term_blur']:
+        return ''
+    cls = re.escape(os.path.basename(st['terminal']))
+    return f"""
+# Терминал без размытия
+windowrule {{
+    name = rice-term-noblur
+    match:class = ^({cls})$
+    no_blur = on
+}}
+"""
+
+
+def bar_rule(st):
+    """Размытие под waybar: правило для слоя. ignore_alpha — не размывать прозрачные промежутки между плашками."""
+    if not (st['blur'] and st['bar_blur']):
+        return ''
+    return """
+# Размытие под панелью
+layerrule {
+    name = rice-bar-blur
+    match:namespace = ^(waybar)$
+    blur = on
+    ignore_alpha = 0.1
+}
+"""
+
+
 UI_BEGIN, UI_END = '/* rice:ui — генерирует rice.py, не править */', '/* rice:ui end */'
 
 
-def put_block(text, block):
-    text = re.sub(re.escape(UI_BEGIN) + r'.*?' + re.escape(UI_END) + r'\n?', '', text, flags=re.S).rstrip('\n') + '\n'
-    return text + (f'\n{UI_BEGIN}\n{block.strip()}\n{UI_END}\n' if block.strip() else '')
+def put_block(text, block, begin=UI_BEGIN, end=UI_END):
+    text = re.sub(re.escape(begin) + r'.*?' + re.escape(end) + r'\n?', '', text, flags=re.S).rstrip('\n') + '\n'
+    return text + (f'\n{begin}\n{block.strip()}\n{end}\n' if block.strip() else '')
 
 
 def gen_ui(st):
@@ -463,8 +537,7 @@ def active_theme(st=None):
 def apply_theme(tid):
     t = themes()[tid]
     wall = os.path.expanduser(t.get('wallpaper') or '')
-    if t.get('generate') == 'x11-weave':
-        make_x11_weave(wall)
+    generate_wallpaper(t)
     st = change(**{k: v for k, v in t['set'].items() if k in DEFAULT})
     if wall and os.path.exists(wall) and wall != current_wallpaper():
         subprocess.Popen([WALLPAPER, wall], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
@@ -486,29 +559,144 @@ def save_current_theme(name):
 def delete_theme(tid):
     t = themes()
     if tid in t and not t[tid].get('builtin'):
+        pid = t[tid]['set'].get('palette', '')
         del t[tid]
         save_themes(t)
+        # своя палитра темы больше никому не нужна — убираем, если она не включена сейчас
+        if PALETTES.get(pid, {}).get('custom') and load()['palette'] != pid \
+                and not any(x['set'].get('palette') == pid for x in t.values()):
+            del PALETTES[pid]
+            save_palettes()
+
+
+# ── свои темы (редактор в gui.py) ─────────────
+PALETTE_KEYS = ['bg', 'bg_dark', 'surface', 'overlay', 'selection', 'muted', 'fg', 'bright',
+                'yellow', 'orange', 'red', 'green', 'cyan', 'blue', 'magenta']
+
+
+def save_palettes():
+    path = os.path.join(HERE, 'palettes.json')
+    tmp = path + '.tmp'
+    json.dump(PALETTES, open(tmp, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+def full_palette(p):
+    """Палитра со всеми ключами, которые нужны редактору (selection бывает не у всех)."""
+    p = dict(p)
+    p.setdefault('selection', blend(p['bg'], p['blue'], .35))
+    return p
+
+
+def save_custom_theme(name, desc, pal, settings, wallpaper, tid=None):
+    """Сохраняет тему вместе с её собственной палитрой. tid — своя тема, которую правим; иначе создаётся новая."""
+    t = themes()
+    if not tid or tid not in t or t[tid].get('builtin'):
+        tid = re.sub(r'[^\w-]+', '-', name.lower()).strip('-') or 'theme'
+        while tid in t:
+            tid += '-2'
+    pid = 'custom-' + tid
+    PALETTES[pid] = {'name': name, 'custom': True, **{k: pal[k] for k in PALETTE_KEYS if k in pal}}
+    save_palettes()
+    sets = {k: settings[k] for k in THEME_KEYS if k in settings}
+    sets['palette'] = pid
+    t[tid] = {'name': name, 'desc': desc or '', 'wallpaper': wallpaper or '', 'set': sets}
+    save_themes(t)
+    return tid
+
+
+def write_png(path, w, h, rgb_bytes):
+    """Простой RGB-PNG без PIL."""
+    import struct, zlib
+    raw = b''.join(b'\0' + bytes(rgb_bytes[y * w * 3:(y + 1) * w * 3]) for y in range(h))
+    chunk = lambda tag, data: struct.pack('>I', len(data)) + tag + data + struct.pack('>I', zlib.crc32(tag + data))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'wb') as f:
+        f.write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+                + chunk(b'IDAT', zlib.compress(raw, 6)) + chunk(b'IEND', b''))
 
 
 def make_x11_weave(path):
     """Классический фон X11 (root weave) — тот самый серый «ковёр» при старте голого X."""
     if os.path.exists(path):
         return
-    from PIL import Image
     bits = [0x88, 0x22, 0x44, 0x11]
     k = 2  # пиксель узора = 2×2, иначе на 1440p сливается в серое
-    tile = Image.new('L', (4 * k, 4 * k), 255)
-    for y, b in enumerate(bits):
-        for x in range(4):
-            if b >> x & 1:
-                tile.paste(0, (x * k, y * k, x * k + k, y * k + k))
     w, h = 2560, 1440
-    img = Image.new('L', (w, h))
-    for y in range(0, h, 4 * k):
-        for x in range(0, w, 4 * k):
-            img.paste(tile, (x, y))
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    img.save(path)
+    rows = [b''.join((b'\0\0\0' if b >> x & 1 else b'\xff\xff\xff') * k for x in range(4)) * (w // (4 * k))
+            for b in bits]
+    write_png(path, w, h, b''.join(rows[(y // k) % 4] for y in range(h)))
+
+
+def make_sakura_hearts(path):
+    """Пастельные сердечки и точки на сливочно-сливовом градиенте. Без PIL: PNG пишем сами."""
+    if os.path.exists(path):
+        return
+    import random
+    w, h = 2560, 1440
+    top, bottom = rgb('#47294d'), rgb('#22182a')
+    img = bytearray()
+    for y in range(h):
+        t = y / (h - 1)
+        img += bytes(round(a + (b - a) * t) for a, b in zip(top, bottom)) * w
+
+    def heart(s):  # маска сердечка s×s со сглаживанием 3×3
+        m = []
+        for y in range(s):
+            row = []
+            for x in range(s):
+                hit = 0
+                for sy in range(3):
+                    for sx in range(3):
+                        u = ((x + (sx + .5) / 3) / s - .5) * 2.6
+                        v = -(((y + (sy + .5) / 3) / s - .5) * 2.6 - .2)
+                        hit += (u * u + v * v - 1) ** 3 - u * u * v ** 3 <= 0
+                row.append(hit / 9)
+            m.append(row)
+        return m
+
+    def dot(s):
+        r = s / 2
+        return [[max(0., min(1., r - ((x + .5 - r) ** 2 + (y + .5 - r) ** 2) ** .5)) for x in range(s)] for y in range(s)]
+
+    def stamp(mask, x0, y0, col, alpha):
+        for y, row in enumerate(mask):
+            yy = y0 + y
+            if not 0 <= yy < h:
+                continue
+            for x, m in enumerate(row):
+                xx = x0 + x
+                if m and 0 <= xx < w:
+                    a, i = m * alpha, (yy * w + xx) * 3
+                    for k in range(3):
+                        img[i + k] = round(img[i + k] + (col[k] - img[i + k]) * a)
+
+    rnd = random.Random(14)
+    pinks = [rgb(c) for c in ('#f7a8d8', '#ff8fab', '#ffb4c8', '#c3b4ff', '#fff0f7')]
+    hearts = {s: heart(s) for s in (22, 34, 50, 72)}
+    dots = {s: dot(s) for s in (5, 8, 12)}
+    cell = 150
+    for gy in range(-1, h // cell + 1):
+        for gx in range(-1, w // cell + 1):
+            x, y = gx * cell + rnd.randrange(cell), gy * cell + rnd.randrange(cell)
+            if rnd.random() < .5:
+                s = rnd.choice(list(hearts))
+                stamp(hearts[s], x, y, rnd.choice(pinks), rnd.uniform(.14, .38))
+            for _ in range(rnd.randrange(3)):
+                s = rnd.choice(list(dots))
+                stamp(dots[s], x + rnd.randrange(-60, 60), y + rnd.randrange(-60, 60), rnd.choice(pinks), rnd.uniform(.2, .5))
+
+    write_png(path, w, h, img)
+
+
+GENERATORS = {'x11-weave': make_x11_weave, 'sakura-hearts': make_sakura_hearts}
+
+
+def generate_wallpaper(t):
+    """Темам с "generate" обои рисуются при первом выборе."""
+    gen = GENERATORS.get(t.get('generate'))
+    if gen and t.get('wallpaper'):
+        gen(os.path.expanduser(t['wallpaper']))
 
 
 def gen_mako(st):
@@ -649,6 +837,9 @@ def menu_waybar():
         items = [
             ('pos', row(ICON['bar'], 'Положение', 'сверху' if st['bar_position'] == 'top' else 'снизу', mc)),
             ('style', row(ICON['bar'], 'Вид', 'остров' if st['bar_style'] == 'island' else 'полоса во всю ширину', mc)),
+            ('layout', row(ICON['bar'], 'Фон', 'отдельные модули' if st['bar_layout'] == 'modules' else 'одна сплошная', mc)),
+            ('opacity', row(ICON['bar'], 'Непрозрачность', f"{round(st['bar_opacity'] * 100)}%", mc)),
+            ('bblur', row(ICON['bar'], 'Размытие под панелью', on(st['bar_blur']), mc)),
             ('height', row(ICON['bar'], 'Высота', f"{st['bar_height']} px", mc)),
             ('title', row(ICON['bar'], 'Заголовок окна', on(st['bar_window_title']), mc)),
         ] + [(m, row(ICON['bar'], n, on(st['bar_modules'].get(m, True)), mc)) for m, n in MODULES]
@@ -660,6 +851,12 @@ def menu_waybar():
             change(bar_position='bottom' if st['bar_position'] == 'top' else 'top')
         elif k == 'style':
             change(bar_style='strip' if st['bar_style'] == 'island' else 'island')
+        elif k == 'layout':
+            change(bar_layout='solid' if st['bar_layout'] == 'modules' else 'modules')
+        elif k == 'opacity':
+            change(bar_opacity=cycle([1.0, 0.92, 0.75, 0.55, 0.35], st['bar_opacity']))
+        elif k == 'bblur':
+            change(bar_blur=not st['bar_blur'])
         elif k == 'height':
             hs = [30, 36, 42]
             change(bar_height=hs[(hs.index(st['bar_height']) + 1) % 3 if st['bar_height'] in hs else 1])
@@ -688,6 +885,8 @@ def menu_windows():
             ('border_style', row(ICON['win'], 'Рамка', 'градиент' if st['border_style'] == 'gradient' else 'один цвет', mc)),
             ('inactive_opacity', row(ICON['win'], 'Неактивные окна', 'непрозрачные' if st['inactive_opacity'] >= 1 else f"прозрачность {round((1 - st['inactive_opacity']) * 100)}%", mc)),
             ('blur', row(ICON['win'], 'Размытие', on(st['blur']), mc)),
+            ('blur_strength', row(ICON['win'], 'Сила размытия', f"{st['blur_strength']} из 10", mc)),
+            ('term_blur', row(ICON['win'], 'Размытие под терминалом', on(st['term_blur']), mc)),
             ('animations', row(ICON['win'], 'Анимации', on(st['animations']), mc)),
         ]
         i = rofi('окна', [r for _, r in items], sel, 'Enter переключает по кругу. Esc: назад')
@@ -701,6 +900,8 @@ def menu_windows():
             'border_style': lambda: 'solid' if st['border_style'] == 'gradient' else 'gradient',
             'inactive_opacity': lambda: cycle([1.0, 0.97, 0.9, 0.85], st['inactive_opacity']),
             'blur': lambda: not st['blur'],
+            'blur_strength': lambda: cycle([2, 4, 6, 8, 10], st['blur_strength']),
+            'term_blur': lambda: not st['term_blur'],
             'animations': lambda: not st['animations'],
         }[k]()
         change(**{k: nxt})
@@ -735,7 +936,7 @@ def menu_notify():
 
 
 def menu_reset():
-    i = rofi('сброс', ['Да, вернуть всё как было в Tea House', 'Нет'], 1, 'Палитра, waybar, окна, шрифт и уведомления вернутся к исходным')
+    i = rofi('сброс', ['Да, вернуть всё как было в hyprEcho', 'Нет'], 1, 'Палитра, waybar, окна, шрифт и уведомления вернутся к исходным')
     if i == 0:
         save(json.loads(json.dumps(DEFAULT)))
         apply(load())
@@ -756,7 +957,7 @@ def menu():
             ('font', row(ICON['font'], 'Шрифт', st['font'], mc)),
             ('wall', row(ICON['wall'], 'Обои', '', mc)),
             ('notify', row(ICON['bell'], 'Уведомления', dict(ANCHORS).get(st['mako_anchor'], ''), mc)),
-            ('reset', row(ICON['reset'], 'Сбросить к Tea House', '', mc)),
+            ('reset', row(ICON['reset'], 'Сбросить к hyprEcho', '', mc)),
         ]
         i = rofi('茶 настройки', [r for _, r in items], sel)
         if i is None:

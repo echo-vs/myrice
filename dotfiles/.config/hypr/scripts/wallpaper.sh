@@ -4,7 +4,7 @@
 #   wallpaper.sh restore — вернуть последние (автозапуск)
 dir=~/Pictures/wallpapers
 state=~/.cache/wallpaper
-default=$dir/tea-house.png
+default=$dir/hyprecho.png
 cache=~/.cache/wallpapers
 
 # swaybg собран без gdk-pixbuf и читает только PNG — остальное конвертим в кеш

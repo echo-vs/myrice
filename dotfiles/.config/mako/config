@@ -1,9 +1,9 @@
-# Tea House · mako
+# hyprEcho · mako
 font=Iosevka 12
-background-color=#282828f0
-text-color=#d4be98
-border-color=#45403d
-progress-color=over #d8a65755
+background-color=#2b1f2ef0
+text-color=#f7e1ec
+border-color=#5a4060
+progress-color=over #f7a8d855
 border-size=1
 border-radius=12
 padding=14,16
@@ -20,14 +20,14 @@ layer=overlay
 format=<b>%s</b>\n%b
 
 [urgency=low]
-text-color=#a99881
+text-color=#c2a8c0
 
 [urgency=high]
-border-color=#ea6962
+border-color=#ff8fab
 default-timeout=0
 
 [app-name=Скриншот]
-border-color=#a9b665
+border-color=#b9e4c9
 
 [mode=do-not-disturb]
 invisible=1

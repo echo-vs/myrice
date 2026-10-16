@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Tea House · окно настроек для людей (GTK4). Всё, что меняется здесь, записывает rice.py,
+# hyprEcho · окно настроек для людей (GTK4). Всё, что меняется здесь, записывает rice.py,
 # так что конфиги руками трогать не нужно.
 #   gui.py          — все настройки        (Super + I, ПКМ по 茶 в waybar)
 #   gui.py themes   — быстрый выбор темы   (Super + T)
@@ -79,10 +79,17 @@ def thumb(path, size=(480, 270)):
     key = hashlib.md5(f'{path}:{os.path.getmtime(path)}:{size}'.encode()).hexdigest()
     out = os.path.join(THUMBS, key + '.png')
     if not os.path.exists(out):
-        from PIL import Image, ImageOps
-        os.makedirs(THUMBS, exist_ok=True)
-        with Image.open(path) as im:
-            ImageOps.fit(im.convert('RGB'), size).save(out)
+        # Через GdkPixbuf, а не PIL: он и так нужен GTK и есть всегда. Обрезка по центру, как COVER.
+        w, h = size
+        try:
+            _fmt, iw, ih = GdkPixbuf.Pixbuf.get_file_info(path)
+            k = max(w / iw, h / ih)
+            pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, max(w, round(iw * k)), max(h, round(ih * k)), False)
+            pb = pb.new_subpixbuf((pb.get_width() - w) // 2, (pb.get_height() - h) // 2, w, h)
+            os.makedirs(THUMBS, exist_ok=True)
+            pb.savev(out, 'png', [], [])
+        except (GLib.Error, TypeError, ZeroDivisionError):
+            return None
     return out
 
 
@@ -354,7 +361,7 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
 
         stack.connect('notify::visible-child-name', ensure)
         side = Gtk.Box(orientation=V, css_classes=['sidebar'], width_request=230)
-        side.append(lbl('茶  Tea House', 'brand'))
+        side.append(lbl('茶  hyprEcho', 'brand'))
         side.append(Gtk.StackSidebar(stack=stack, vexpand=True))
         side.append(lbl(T('Esc — закрыть\nВсё применяется сразу', 'Esc to close\nChanges apply instantly'),
                         'dim', margin_start=24, margin_bottom=6))
@@ -368,8 +375,8 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
     # ── темы ──────────────────────────────────
     def wall_pixbuf(self, t, w, h):
         path = os.path.expanduser(t.get('wallpaper') or '')
-        if t.get('generate') == 'x11-weave' and not os.path.exists(path):
-            rice.make_x11_weave(path)
+        if t.get('generate') and not os.path.exists(path):
+            rice.generate_wallpaper(t)
         key = (path, w, h)
         if key not in self.pixbufs:
             th = thumb(path)
@@ -379,7 +386,7 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
     def draw_preview(self, _area, cr, w, h, t):
         """Мини-рабочий стол: обои, панель и два окна так, как их нарисует тема."""
         st = {**rice.DEFAULT, **self.st, **t['set']}
-        c, _, ansi = rice.colors(st)
+        c, _, ansi = rice.colors(st, t.get('palette_data'))
         retro = st['ui_style'] == 'retro'
         rrect(cr, 0, 0, w, h, 0 if retro else 8)
         cr.clip()
@@ -396,9 +403,17 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
         bh = max(9, st['bar_height'] * 0.3)
         m = 5 if island else 0
         by = m if st['bar_position'] == 'top' else h - bh - m
-        rrect(cr, m, by, w - 2 * m, bh, 0 if retro or not island else 4)
-        cr.set_source_rgba(*rgbf(c['bg'], 1 if retro else 0.92))
-        cr.fill()
+        bar_a = 1 if retro else max(0.35, float(st.get('bar_opacity', 0.92)))
+        if st.get('bar_layout') == 'modules' and not retro:
+            pm = 0 if island else 3
+            for px, pw in ((m + pm, w * 0.3), (w / 2 - w * 0.07, w * 0.14), (w - m - pm - w * 0.3, w * 0.3)):
+                rrect(cr, px, by + (0 if island else 1), pw, bh - (0 if island else 2), 4)
+                cr.set_source_rgba(*rgbf(c['bg'], bar_a))
+                cr.fill()
+        else:
+            rrect(cr, m, by, w - 2 * m, bh, 0 if retro or not island else 4)
+            cr.set_source_rgba(*rgbf(c['bg'], bar_a))
+            cr.fill()
         for i in range(4):
             cr.set_source_rgba(*rgbf(c['tea'] if i == 0 else c['muted']))
             rrect(cr, m + 8 + i * 9, by + bh / 2 - 2.5, 6, 5, 0 if retro else 2)
@@ -458,15 +473,20 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
             card.append(lbl(desc, 'dim', max_width_chars=34))
             btn = Gtk.Button(child=card, css_classes=['theme-card'] + (['active'] if tid == active else []))
             btn.connect('clicked', lambda _b, tid=tid: self.pick_theme(tid))
-            if not t.get('builtin'):
-                outer = Gtk.Box(orientation=V, spacing=4)
-                outer.append(btn)
-                rm = Gtk.Button(label=T('Удалить тему', 'Delete theme'), css_classes=['flat'], halign=Gtk.Align.END)
-                rm.connect('clicked', lambda _b, tid=tid: (rice.delete_theme(tid), self.rebuild()))
-                outer.append(rm)
-                flow.append(outer)
+            outer = Gtk.Box(orientation=V, spacing=4)
+            outer.append(btn)
+            acts = Gtk.Box(spacing=4, halign=Gtk.Align.END)
+            if t.get('builtin'):
+                ed = Gtk.Button(label=T('Сделать на её основе', 'Make one from this'), css_classes=['flat'])
             else:
-                flow.append(btn)
+                ed = Gtk.Button(label=T('Изменить', 'Edit'), css_classes=['flat'])
+                rm = Gtk.Button(label=T('Удалить', 'Delete'), css_classes=['flat'])
+                rm.connect('clicked', lambda _b, tid=tid: (rice.delete_theme(tid), self.rebuild()))
+                acts.append(rm)
+            ed.connect('clicked', lambda _b, tid=tid: ThemeEditor(self, tid))
+            acts.prepend(ed)
+            outer.append(acts)
+            flow.append(outer)
         return flow
 
     def pick_theme(self, tid):
@@ -494,7 +514,14 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
         return page(T('Темы', 'Themes'),
                     T('Одно нажатие — и меняется всё: цвета, окна, панель, меню, терминал и обои. Быстрый вызов: Super + T.',
                       'One click changes everything: colors, windows, panel, menus, terminal and wallpaper. Shortcut: Super + T.'),
-                    self.theme_cards(3), self.save_theme_row())
+                    self.create_theme_row(), self.theme_cards(3), self.save_theme_row())
+
+    def create_theme_row(self):
+        b = Gtk.Button(label=T('Создать свою тему', 'Create a theme'), css_classes=['accent'])
+        b.connect('clicked', lambda *_: ThemeEditor(self))
+        return group(None, row(T('Своя тема', 'Your own theme'),
+                               T('Свои цвета, обои, панель и окна — с живым превью. Начнёт с того, что у тебя сейчас.',
+                                 'Your own colors, wallpaper, panel and windows, with a live preview. Starts from your current look.'), b))
 
     def build_themes_popup(self):
         box = Gtk.Box(orientation=V, spacing=16, margin_top=20, margin_bottom=20, margin_start=22, margin_end=22)
@@ -538,11 +565,13 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
                       if os.path.exists(rice.HYPRBARS) else T('Нет плагина hyprbars', 'hyprbars plugin not found'), bars)),
             group(T('Эффекты', 'Effects'),
                   row(T('Размытие', 'Blur'), T('Под полупрозрачными окнами и панелью', 'Behind translucent windows and the panel'), self.sw('blur')),
+                  row(T('Сила размытия', 'Blur strength'), None, self.scale('blur_strength', 1, 10, 1, conv=int, fmt=lambda v: f'{int(v)}')),
                   row(T('Тени', 'Shadows'), None, self.sw('shadow')),
                   row(T('Анимации', 'Animations'), None, self.sw('animations'))),
             group(T('Терминал и шрифт', 'Terminal and font'),
                   row(T('Шрифт', 'Font'), T('Терминал, панель, меню, уведомления, экран блокировки', 'Terminal, panel, menus, notifications, lock screen'), self.dd('font', [(f, f) for f in fonts])),
-                  row(T('Непрозрачность терминала', 'Terminal opacity'), T('Для новых окон kitty', 'For new kitty windows'), self.scale('term_opacity', 0.3, 1, 0.05, 2, pct))),
+                  row(T('Непрозрачность терминала', 'Terminal opacity'), T('Для новых окон kitty', 'For new kitty windows'), self.scale('term_opacity', 0.3, 1, 0.05, 2, pct)),
+                  row(T('Размытие под терминалом', 'Blur behind the terminal'), T('Выключи, чтобы сквозь терминал были видны чёткие обои и окна', 'Turn off to see sharp wallpaper and windows through the terminal'), self.sw('term_blur'))),
         )
 
     # ── панель ────────────────────────────────
@@ -560,6 +589,15 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
                       self.dd('bar_style', [('island', T('остров', 'island')), ('strip', T('полоса', 'strip'))])),
                   row(T('Высота', 'Height'), None, self.scale('bar_height', 24, 48, 1, conv=int, fmt=lambda v: f'{int(v)} px')),
                   row(T('Заголовок активного окна', 'Active window title'), None, self.sw('bar_window_title'))),
+            group(T('Фон и размытие', 'Background and blur'),
+                  row(T('Фон', 'Background'), T('Одна сплошная плашка или отдельные: слева, по центру и справа', 'One solid bar, or separate pills left, center and right'),
+                      self.dd('bar_layout', [('solid', T('одна сплошная', 'solid')), ('modules', T('отдельные модули', 'modules'))])),
+                  row(T('Непрозрачность', 'Opacity'), T('Чем прозрачнее, тем заметнее размытие', 'The more transparent, the more the blur shows'),
+                      self.scale('bar_opacity', 0.2, 1, 0.01, 2, lambda v: f'{round(v * 100)}%')),
+                  row(T('Размытие под панелью', 'Blur behind the panel'),
+                      T('Нужно включённое размытие в «Оформлении»', 'Needs blur enabled under Appearance'), self.sw('bar_blur')),
+                  row(T('Сила размытия', 'Blur strength'), T('Общая для панели и окон: так устроен Hyprland', 'Shared by panel and windows: Hyprland has one setting'),
+                      self.scale('blur_strength', 1, 10, 1, conv=int, fmt=lambda v: f'{int(v)}'))),
             group(T('Что показывать справа', 'What to show on the right'), *mods),
         )
 
@@ -854,8 +892,8 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
 
     # ── сброс и справка ───────────────────────
     def page_system(self):
-        reset = Gtk.Button(label=T('Вернуть Tea House', 'Restore Tea House'), css_classes=['accent'])
-        reset.connect('clicked', lambda *_: self.pick_theme('tea-house'))
+        reset = Gtk.Button(label=T('Вернуть hyprEcho', 'Restore hyprEcho'), css_classes=['accent'])
+        reset.connect('clicked', lambda *_: self.pick_theme('hyprecho'))
         folder = Gtk.Button(label=T('Открыть папку', 'Open folder'))
         folder.connect('clicked', lambda *_: spawn('xdg-open', os.path.expanduser('~/.config/hypr')))
         menu = Gtk.Button(label=T('Открыть', 'Open'))
@@ -864,7 +902,7 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
         return page(
             T('Сброс и справка', 'Reset & help'), None,
             group(None,
-                  row(T('Вернуть оформление Tea House', 'Restore the Tea House look'),
+                  row(T('Вернуть оформление hyprEcho', 'Restore the hyprEcho look'),
                       T('Язык, раскладки, мышь, экран и программы останутся как есть', 'Language, keyboard, mouse, display and apps stay as they are'), reset),
                   row(T('Быстрое меню в rofi', 'Quick rofi menu'), 'Super + Shift + I', menu),
                   row(T('Конфиги', 'Config files'),
@@ -872,6 +910,347 @@ window.rice.retro {{ border: 3px solid {c['tea']}; }}
                         'For tinkerers. rice.conf is written by this window, don’t edit it.'), folder),
                   row(T('Плагин заголовков окон', 'Title bar plugin'), f'hyprbars: {plug} · {rice.HYPRBARS}')),
         )
+
+
+# ── редактор тем ──────────────────────────────
+COLOR_GROUPS = [
+    (('Фон', 'Background'), [('bg', 'Фон окон и панели', 'Window and panel background'),
+                             ('bg_dark', 'Самый тёмный фон', 'Darkest background'),
+                             ('surface', 'Плашки и карточки', 'Cards and pills'),
+                             ('overlay', 'Рамки', 'Borders'),
+                             ('selection', 'Выделение текста', 'Text selection')]),
+    (('Текст', 'Text'), [('fg', 'Текст', 'Text'), ('muted', 'Приглушённый текст', 'Muted text'),
+                         ('bright', 'Яркий текст', 'Bright text')]),
+    (('Цвета', 'Colors'), [('yellow', 'Жёлтый', 'Yellow'), ('orange', 'Оранжевый', 'Orange'), ('red', 'Красный', 'Red'),
+                           ('green', 'Зелёный', 'Green'), ('cyan', 'Бирюзовый', 'Teal'), ('blue', 'Синий', 'Blue'),
+                           ('magenta', 'Пурпурный', 'Magenta')]),
+]
+IMG_EXT = ('.png', '.jpg', '.jpeg', '.webp')
+
+
+def contrast(a, b):
+    def L(h):
+        ch = [x / 255 for x in rice.rgb(h)]
+        ch = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in ch]
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+    la, lb = sorted((L(a), L(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def to_hex(rgba):
+    return '#%02x%02x%02x' % tuple(round(max(0, min(1, v)) * 255) for v in (rgba.red, rgba.green, rgba.blue))
+
+
+def to_rgba(h):
+    c = Gdk.RGBA()
+    c.parse(h)
+    return c
+
+
+class ThemeEditor:
+    """Отдельное окно: черновик темы живёт здесь, система не меняется, пока не нажмёшь «Применить»."""
+
+    def __init__(self, app, tid=None):
+        self.app = app
+        themes = rice.themes()
+        src = themes.get(tid) if tid else None
+        self.tid = tid if src and not src.get('builtin') else None
+        st = {**rice.DEFAULT, **app.st, **(src['set'] if src else {})}
+        self.set = {k: st[k] for k in rice.THEME_KEYS if k in st}
+        self.pal = rice.full_palette(rice.PALETTES.get(st['palette']) or rice.PALETTES[rice.DEFAULT['palette']])
+        if src and not self.tid:
+            name = src['name'] + T(' (моя)', ' (mine)')
+        else:
+            name = src['name'] if src else T('Моя тема', 'My theme')
+        self.generate = src.get('generate') if src else None
+        self.wall = (src.get('wallpaper') if src else '') or rice.current_wallpaper()
+        self.color_btns = {}
+
+        self.win = Gtk.Window(application=app, decorated=False, css_classes=['rice'] + (['retro'] if app.st['ui_style'] == 'retro' else []))
+        self.win.set_default_size(1040, 720)
+        keys = Gtk.EventControllerKey()
+        keys.connect('key-pressed', lambda _c, k, *_: k == Gdk.KEY_Escape and (self.win.close() or True))
+        self.win.add_controller(keys)
+
+        # слева — настройки
+        left = Gtk.Box(orientation=V, spacing=22, margin_top=24, margin_bottom=28, margin_start=28, margin_end=20)
+        head = Gtk.Box(orientation=V, spacing=4)
+        head.append(lbl(T('Редактор темы', 'Theme editor') if not self.tid else T('Изменить тему', 'Edit theme'), 'h1'))
+        head.append(lbl(T('Меняй что хочешь — превью справа обновляется сразу. Система не меняется, пока не нажмёшь «Применить».',
+                          'Change anything; the preview on the right updates live. Nothing changes until you press Apply.'), 'dim'))
+        left.append(head)
+
+        self.name = Gtk.Entry(text=name, hexpand=True)
+        self.desc = Gtk.Entry(text=(src.get('desc', '') if src and self.tid else ''), hexpand=True,
+                              placeholder_text=T('Например: «тёплая, для вечера»', 'e.g. “warm, for evenings”'))
+        left.append(group(None, row(T('Название', 'Name'), None, self.name), row(T('Описание', 'Description'), None, self.desc)))
+
+        # основа палитры
+        keys_p = list(rice.PALETTES)
+        base = Gtk.DropDown.new_from_strings([rice.PALETTES[k]['name'] for k in keys_p])
+        if st['palette'] in keys_p:
+            base.set_selected(keys_p.index(st['palette']))
+        base.connect('notify::selected', lambda w, _: self.load_palette(keys_p[w.get_selected()]))
+        acc = [a for a, _ in rice.ACCENTS]
+        accent = Gtk.DropDown.new_from_strings([ACCENTS_EN[a] if LANG == 'en' else n for a, n in rice.ACCENTS])
+        if self.set['accent'] in acc:
+            accent.set_selected(acc.index(self.set['accent']))
+        accent.connect('notify::selected', lambda w, _: self.put(accent=acc[w.get_selected()]))
+        left.append(group(T('Цвета', 'Colors'),
+                          row(T('Взять цвета из палитры', 'Start from a palette'),
+                              T('Заменит все цвета ниже — потом подправь нужные', 'Replaces all colors below; then tweak what you like'), base),
+                          row(T('Акцент', 'Accent'), T('Рамка активного окна, текущий стол, выделение', 'Active border, current workspace, selection'), accent)))
+        for (gru, gen), items in COLOR_GROUPS:
+            flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3, min_children_per_line=2,
+                               column_spacing=10, row_spacing=6, homogeneous=True, margin_top=10, margin_bottom=10,
+                               margin_start=12, margin_end=12)
+            for key, ru, en in items:
+                flow.append(self.color_item(key, en if LANG == 'en' else ru))
+            card = Gtk.Box(orientation=V, css_classes=['card'])
+            card.append(flow)
+            g = Gtk.Box(orientation=V, spacing=8)
+            g.append(lbl(T(gru, gen), 'h2'))
+            g.append(card)
+            left.append(g)
+
+        # обои
+        left.append(self.wall_group())
+
+        # окна и панель
+        gaps = [(g, {'none': 'none', 'compact': 'tight', 'normal': 'normal', 'wide': 'roomy'}[g] if LANG == 'en' else v[2])
+                for g, v in rice.GAPS.items()]
+        fonts = rice.installed_fonts()
+        if self.set['font'] not in fonts:
+            fonts.append(self.set['font'])
+        pct = lambda v: f'{round(v * 100)}%'
+        left.append(group(T('Окна', 'Windows'),
+                          row(T('Стиль', 'Style'), T('Ретро — объёмные серые кнопки, как в старых X11', 'Retro: beveled buttons like old X11'),
+                              self.dd('ui_style', [('modern', T('современный', 'modern')), ('retro', T('ретро', 'retro'))])),
+                          row(T('Скругление углов', 'Corner rounding'), None, self.scale('rounding', 0, 20, 1, int, lambda v: f'{int(v)} px')),
+                          row(T('Отступы', 'Gaps'), None, self.dd('gaps', gaps)),
+                          row(T('Толщина рамки', 'Border width'), None, self.scale('border_size', 0, 6, 1, int, lambda v: f'{int(v)} px')),
+                          row(T('Рамка', 'Border'), None, self.dd('border_style', [('gradient', T('градиент', 'gradient')), ('solid', T('один цвет', 'solid'))])),
+                          row(T('Прозрачность неактивных окон', 'Inactive window opacity'), None, self.scale('inactive_opacity', 0.7, 1, 0.01, float, pct, 2)),
+                          row(T('Непрозрачность терминала', 'Terminal opacity'), None, self.scale('term_opacity', 0.3, 1, 0.05, float, pct, 2)),
+                          row(T('Шрифт', 'Font'), None, self.dd('font', [(f, f) for f in fonts]))))
+        left.append(group(T('Эффекты', 'Effects'),
+                          row(T('Размытие', 'Blur'), None, self.sw('blur')),
+                          row(T('Сила размытия', 'Blur strength'), None, self.scale('blur_strength', 1, 10, 1, int, lambda v: f'{int(v)}')),
+                          row(T('Тени', 'Shadows'), None, self.sw('shadow')),
+                          row(T('Анимации', 'Animations'), None, self.sw('animations'))))
+        left.append(group(T('Панель', 'Panel'),
+                          row(T('Где', 'Position'), None, self.dd('bar_position', [('top', T('сверху', 'top')), ('bottom', T('снизу', 'bottom'))])),
+                          row(T('Вид', 'Style'), None, self.dd('bar_style', [('island', T('остров', 'island')), ('strip', T('полоса', 'strip'))])),
+                          row(T('Фон', 'Background'), None, self.dd('bar_layout', [('solid', T('одна сплошная', 'solid')), ('modules', T('отдельные модули', 'modules'))])),
+                          row(T('Непрозрачность', 'Opacity'), None, self.scale('bar_opacity', 0.2, 1, 0.01, float, pct, 2)),
+                          row(T('Размытие под панелью', 'Blur behind the panel'), None, self.sw('bar_blur')),
+                          row(T('Высота', 'Height'), None, self.scale('bar_height', 24, 48, 1, int, lambda v: f'{int(v)} px')),
+                          row(T('Заголовок активного окна', 'Active window title'), None, self.sw('bar_window_title'))))
+        scroll = Gtk.ScrolledWindow(child=left, hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True, hexpand=True)
+
+        # справа — превью и кнопки
+        right = Gtk.Box(orientation=V, spacing=14, margin_top=24, margin_bottom=24, margin_start=8, margin_end=24, width_request=440)
+        top = Gtk.Box()
+        top.append(lbl(T('Превью', 'Preview'), 'h2', hexpand=True))
+        close = Gtk.Button(label='✕', css_classes=['flat', 'close'], tooltip_text='Esc')
+        close.connect('clicked', lambda *_: self.win.close())
+        top.append(close)
+        right.append(top)
+        self.preview = Gtk.DrawingArea(content_width=430, content_height=242)
+        self.preview.set_draw_func(lambda a, cr, w, h: app.draw_preview(a, cr, w, h, self.as_theme()))
+        right.append(self.preview)
+        self.swatches = Gtk.DrawingArea(content_width=430, content_height=26)
+        self.swatches.set_draw_func(self.draw_swatches)
+        right.append(self.swatches)
+        self.note = lbl('', 'note')
+        right.append(self.note)
+        right.append(Gtk.Box(vexpand=True))
+        btns = Gtk.Box(spacing=8, halign=Gtk.Align.END)
+        cancel = Gtk.Button(label=T('Отмена', 'Cancel'))
+        cancel.connect('clicked', lambda *_: self.win.close())
+        save = Gtk.Button(label=T('Сохранить', 'Save'))
+        save.connect('clicked', lambda *_: self.save(False))
+        apply = Gtk.Button(label=T('Сохранить и применить', 'Save and apply'), css_classes=['accent'])
+        apply.connect('clicked', lambda *_: self.save(True))
+        for b in (cancel, save, apply):
+            btns.append(b)
+        right.append(btns)
+
+        box = Gtk.Box()
+        box.append(scroll)
+        box.append(right)
+        self.win.set_child(box)
+        self.check()
+        self.win.present()
+
+    # черновик
+    def as_theme(self):
+        return {'set': self.set, 'wallpaper': self.wall, 'generate': self.generate, 'palette_data': self.pal}
+
+    def put(self, **kv):
+        self.set.update(kv)
+        self.redraw()
+
+    def redraw(self):
+        self.preview.queue_draw()
+        self.swatches.queue_draw()
+        self.check()
+
+    def check(self):
+        bg, fg, muted = self.pal['bg'], self.pal['fg'], self.pal['muted']
+        acc = self.pal.get(self.set['accent'], self.pal['yellow'])
+        cr, cm, ca = contrast(fg, bg), contrast(muted, bg), contrast(acc, bg)
+        warn = []
+        if cr < 4.5:
+            warn.append(T(f'Текст плохо читается на фоне (контраст {cr:.1f}, лучше от 4.5)', f'Text is hard to read on the background (contrast {cr:.1f}, aim for 4.5+)'))
+        if cm < 2.5:
+            warn.append(T(f'Приглушённый текст почти сливается с фоном ({cm:.1f})', f'Muted text almost blends into the background ({cm:.1f})'))
+        if ca < 2:
+            warn.append(T(f'Акцент плохо виден на фоне ({ca:.1f})', f'Accent is hard to see on the background ({ca:.1f})'))
+        self.note.set_label('\n'.join(warn) if warn else T(f'Контраст текста {cr:.1f} — читается хорошо', f'Text contrast {cr:.1f}: easy to read'))
+
+    def draw_swatches(self, _a, cr, w, h):
+        keys = ['bg_dark', 'bg', 'surface', 'overlay', 'muted', 'fg', 'red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'magenta']
+        sw = w / len(keys)
+        for i, k in enumerate(keys):
+            cr.set_source_rgba(*rgbf(self.pal[k]))
+            rrect(cr, i * sw + 1, 0, sw - 2, h, 4)
+            cr.fill()
+        acc = self.set['accent'] if self.set['accent'] in self.pal else 'yellow'
+        i = keys.index(acc)
+        cr.set_source_rgba(*rgbf(self.pal['fg']))
+        cr.set_line_width(2)
+        rrect(cr, i * sw + 2, 1, sw - 4, h - 2, 4)
+        cr.stroke()
+
+    def load_palette(self, pid):
+        self.pal = rice.full_palette(rice.PALETTES[pid])
+        for k, b in self.color_btns.items():
+            b.set_rgba(to_rgba(self.pal[k]))
+        self.redraw()
+
+    # контролы черновика
+    def color_item(self, key, title):
+        dlg = Gtk.ColorDialog(with_alpha=False, title=title)
+        b = Gtk.ColorDialogButton(dialog=dlg, rgba=to_rgba(self.pal[key]), valign=CENTER)
+
+        def changed(w, _):
+            h = to_hex(w.get_rgba())
+            if h != self.pal.get(key):
+                self.pal[key] = h
+                self.redraw()
+
+        b.connect('notify::rgba', changed)
+        self.color_btns[key] = b
+        box = Gtk.Box(spacing=8)
+        box.append(b)
+        box.append(lbl(title, valign=CENTER, hexpand=True))
+        return box
+
+    def sw(self, key):
+        s = Gtk.Switch(active=bool(self.set[key]), valign=CENTER)
+        s.connect('notify::active', lambda w, _: self.put(**{key: w.get_active()}))
+        return s
+
+    def dd(self, key, opts):
+        vals = [v for v, _ in opts]
+        d = Gtk.DropDown.new_from_strings([l for _, l in opts])
+        if self.set[key] in vals:
+            d.set_selected(vals.index(self.set[key]))
+        d.connect('notify::selected', lambda w, _: self.put(**{key: vals[w.get_selected()]}))
+        return d
+
+    def scale(self, key, lo, hi, step, conv, fmt, digits=0):
+        s = Gtk.Scale.new_with_range(H, lo, hi, step)
+        s.set_value(self.set[key])
+        s.set_digits(digits)
+        s.set_draw_value(True)
+        s.set_value_pos(Gtk.PositionType.LEFT)
+        s.set_size_request(240, -1)
+        s.set_format_value_func(lambda _s, v: fmt(v))
+        s.connect('value-changed', lambda w: self.put(**{key: conv(round(w.get_value(), digits))}))
+        return s
+
+    # обои
+    def wall_group(self):
+        self.wall_flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=4, min_children_per_line=2,
+                                     column_spacing=6, row_spacing=6, homogeneous=True, margin_top=10, margin_start=10, margin_end=10)
+        self.fill_walls()
+        pick = Gtk.Button(label=T('Другой файл…', 'Other file…'))
+        pick.connect('clicked', self.pick_file)
+        foot = Gtk.Box(spacing=10, css_classes=['row'])
+        self.wall_lbl = lbl(os.path.basename(self.wall) or T('не выбраны', 'none'), 'dim', hexpand=True, wrap=False, ellipsize=3)
+        foot.append(self.wall_lbl)
+        foot.append(pick)
+        card = Gtk.Box(orientation=V, css_classes=['card'])
+        card.append(self.wall_flow)
+        card.append(foot)
+        g = Gtk.Box(orientation=V, spacing=8)
+        g.append(lbl(T('Обои', 'Wallpaper'), 'h2'))
+        g.append(card)
+        return g
+
+    def fill_walls(self):
+        while (c := self.wall_flow.get_first_child()):
+            self.wall_flow.remove(c)
+        files = sorted(os.path.join(rice.WALL_DIR, f) for f in os.listdir(rice.WALL_DIR)
+                       if f.lower().endswith(IMG_EXT)) if os.path.isdir(rice.WALL_DIR) else []
+        cur = os.path.realpath(os.path.expanduser(self.wall)) if self.wall else ''
+        if cur and cur not in [os.path.realpath(f) for f in files] and os.path.isfile(cur):
+            files.insert(0, cur)
+        for f in files:
+            th = thumb(f)
+            if not th:
+                continue
+            pic = Gtk.Picture.new_for_filename(th)
+            pic.set_can_shrink(True)
+            pic.set_size_request(110, 62)
+            b = Gtk.Button(child=pic, css_classes=['wall'] + (['on'] if os.path.realpath(f) == cur else []), tooltip_text=os.path.basename(f))
+            b.connect('clicked', lambda _b, f=f: self.set_wall(f))
+            self.wall_flow.append(b)
+
+    def set_wall(self, f):
+        self.wall = f
+        self.generate = None
+        self.wall_lbl.set_label(os.path.basename(f))
+        self.fill_walls()
+        self.redraw()
+
+    def pick_file(self, *_):
+        dlg = Gtk.FileDialog(title=T('Выбери обои', 'Choose a wallpaper'))
+        flt = Gtk.FileFilter(name=T('Картинки', 'Images'))
+        for e in IMG_EXT:
+            flt.add_suffix(e.lstrip('.'))
+        store = Gio.ListStore.new(Gtk.FileFilter)
+        store.append(flt)
+        dlg.set_filters(store)
+
+        def done(d, res):
+            try:
+                f = d.open_finish(res)
+            except GLib.Error:
+                return
+            if f and f.get_path():
+                self.set_wall(f.get_path())
+
+        dlg.open(self.win, None, done)
+
+    # сохранение
+    def save(self, apply):
+        name = self.name.get_text().strip()
+        if not name:
+            self.note.set_label(T('Дай теме название — без него не сохранить', 'Give the theme a name first'))
+            self.name.grab_focus()
+            return
+        tid = rice.save_custom_theme(name, self.desc.get_text().strip(), self.pal, self.set, self.wall, self.tid)
+        self.tid = tid
+        app = self.app
+        if apply:
+            app.worker.submit(lambda: rice.apply_theme(tid))
+            app.after.append(app.rebuild)
+        elif app.win:
+            app.rebuild()
+        self.win.close()
 
 
 if __name__ == '__main__':

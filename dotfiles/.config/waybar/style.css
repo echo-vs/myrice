@@ -1,4 +1,4 @@
-/* Tea House · Kanagawa Dragon */
+/* hyprEcho · Waybar */
 @import "colors.css";
 
 * {
@@ -79,3 +79,15 @@ window#waybar.empty #window { padding: 0; }
 #custom-power   { color: @clay; margin-right: 2px; }
 
 #tray > .needs-attention { background: @clay; border-radius: 6px; }
+
+/* rice:bar — генерирует rice.py, не править */
+window#waybar { background: transparent; border: none; }
+.modules-left, .modules-center, .modules-right {
+  background: alpha(@bg, 0.72);
+  border: 1px solid alpha(@overlay, 0.9);
+  border-radius: 12px;
+  padding: 0 6px;
+}
+.modules-left { margin-left: 0px; }
+.modules-right { margin-right: 0px; }
+/* rice:bar end */

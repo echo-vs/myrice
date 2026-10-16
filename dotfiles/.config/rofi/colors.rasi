@@ -1,10 +1,10 @@
-/* Gruvbox Material · сгенерировано rice.py */
+/* Sakura Milk · сгенерировано rice.py */
 * {
-    bg:       #282828f0;
-    surface:  #32302f;
-    overlay:  #45403d;
-    muted:    #928374;
-    fg:       #d4be98;
-    tea:      #d8a657;
-    ink:      #282828;
+    bg:       #2b1f2ef0;
+    surface:  #3b2a40;
+    overlay:  #5a4060;
+    muted:    #a68aa8;
+    fg:       #f7e1ec;
+    tea:      #f7a8d8;
+    ink:      #2b1f2e;
 }
